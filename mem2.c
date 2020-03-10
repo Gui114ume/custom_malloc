@@ -53,13 +53,13 @@ struct bloc* bloc_origine_512 = NULL;
 struct bloc* bloc_origine_1024 = NULL;
 struct bloc* bloc_origine_huge = NULL;
 
-unsigned long long taille_max = pow(2,16);
-int    indice = 0;
+static int    indice = 0;
 
 static int j64_max = 0;
 static int j128_max = 0;
 static int j256_max = 0;
 static int j512_max = 0;
+static int j1024_max = 0;
 
 static pthread_mutex_t mutex_malloc = PTHREAD_MUTEX_INITIALIZER;
 
@@ -67,11 +67,6 @@ void* malloc(size_t size)
 {
     pthread_mutex_lock(&mutex_malloc);
     //printf("entrée dans le malloc\n");
-#define ADDR_FINALE_64  0   //comment faire ca ? etant donne que c'est une adresse ?
-#define ADDR_FINALE_128 0
-#define ADDR_FINALE_256 0
-#define ADDR_FINALE_512 0
-#define ADDR_FINALE_1024 0
 
     void* ret_ptr64 = NULL;
     void* ret_ptr128 = NULL;
@@ -101,14 +96,14 @@ void* malloc(size_t size)
         ret_ptr128 = mmap(NULL, t128, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         ret_ptr256 = mmap(NULL, t256, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         ret_ptr512 = mmap(NULL, t512, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        //ret_ptr1024 = mmap(NULL, t1024, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        ret_ptr1024 = mmap(NULL, t1024, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 
         bloc_origine_64  = ret_ptr64;
         bloc_origine_128 = ret_ptr128;
         bloc_origine_256 = ret_ptr256;
         bloc_origine_512 = ret_ptr512;
-        //bloc_origine_1024 = ret_ptr1024;
+        bloc_origine_1024 = ret_ptr1024;
         bloc_origine_huge = ret_ptr_huge;//initialiser le premier pour mettre des NULL partout, on pourra ainsi
         // faire un recyclage par une boucle while en cas d'appel a malloc pour une huge size
 
@@ -198,20 +193,23 @@ void* malloc(size_t size)
         j512_max = i;
         i=0;
 
-        /*
+
         while( t1024 > sizeof(struct bloc) + 1024 )
         {
-            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->adresse       = ((void*)bloc_origine_1024 + i * ( 1024+ sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
+            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->adresse       = ((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
             ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->addr_previous = (((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 +
-                                                                                                                                                            sizeof(struct bloc)) ))->adresse == ret_ptr1024 + sizeof(struct bloc) ) ? NULL : ((struct bloc*)((void*)bloc_origine_1024 + i * (1024 +
-                                                                                                                                                                                                                                                                                           sizeof(struct bloc)) ))->adresse - 1024 - sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->addr_next     = (((struct bloc*)((void*)bloc_origine_1024 + i * (1024 +
-                                                                                                                                                           sizeof(struct bloc)) ))->adresse != ADDR_FINALE_1024 ) ? ((struct bloc*)((void*)bloc_origine_1024 + i * (1024 + sizeof(struct bloc)) ))->adresse + sizeof(struct bloc) + 1024: NULL;
+                    sizeof(struct bloc)) ))->adresse == ret_ptr1024 + sizeof(struct bloc) ) ? NULL : ((struct bloc*)((void*)bloc_origine_1024 + i * (1024 +
+                            sizeof(struct bloc)) ))->adresse - 1024 - sizeof(struct bloc);
+            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->addr_next     = ((struct bloc*)((void*)bloc_origine_1024 + i * (1024 + sizeof(struct bloc)) ))->adresse + sizeof(struct bloc) + 1024;
+            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->taille = 1024 + sizeof(struct bloc);
+            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->numero = 0;
 
             t1024 -= (sizeof(struct bloc) + 1024);
             ++i;
         }
-         */
+
+        j1024_max = i;
+        i = 0;
 
         if( size < 64 )
         {
@@ -261,6 +259,19 @@ void* malloc(size_t size)
             pthread_mutex_unlock(&mutex_malloc);
             return ret_ptr512;
         }
+
+        else if(size < 1024)
+        {
+            ret_ptr1024 = bloc_origine_1024->adresse;
+            bloc_origine_1024->numero = 1;
+            if(ret_ptr1024 == (void*)NULL)
+            {
+                abort();
+            }
+            pthread_mutex_unlock(&mutex_malloc);
+            return ret_ptr1024;
+        }
+
         else
         {
             ret_ptr_huge = mmap(NULL, sizeof(struct bloc) + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -283,16 +294,19 @@ void* malloc(size_t size)
     else // on ecrit un algo qui cherche une place pour satisfaire la demande et met à jour les adresses previous et next, puis
     // si on y arrive pas , mmap
     {
-        int j = rand()%j64_max;
-        if(size < 64)
-        {
-            while( ((struct bloc*)((void*)bloc_origine_64 + (j )* (64 + sizeof(struct bloc)) ))->addr_next != NULL ) //probleeeeeeeme
+        int j = rand() % j64_max;
+        if (size < 64) {
+            while (((struct bloc *) ((void *) bloc_origine_64 + (j) * (64 + sizeof(struct bloc))))->addr_next !=
+                   NULL) //probleeeeeeeme
             {
-                if(  ( ((struct bloc*)((void*)bloc_origine_64 + (j + 1)* (64 + sizeof(struct bloc) )) )->numero == 0 ) ) // est-ce libre ?
+                if ((((struct bloc *) ((void *) bloc_origine_64 + (j + 1) * (64 + sizeof(struct bloc))))->numero ==
+                     0)) // est-ce libre ?
                 {
-                    ((struct bloc*)((void*)bloc_origine_64 + (j + 1)* (64 + sizeof(struct bloc) )) )->numero = 1; //maintenant ca l'est plus
+                    ((struct bloc *) ((void *) bloc_origine_64 +
+                                      (j + 1) * (64 + sizeof(struct bloc))))->numero = 1; //maintenant ca l'est plus
 
-                    if( ((struct bloc*)((void*)bloc_origine_64 + (j + 1) * (64 + sizeof(struct bloc) )) )->adresse == (void*)NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
+                    if (((struct bloc *) ((void *) bloc_origine_64 + (j + 1) * (64 + sizeof(struct bloc))))->adresse ==
+                        (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
                         //printf("64 = NULL, j = %u,abort()\n",j);// GRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
                         pthread_mutex_unlock(&mutex_malloc);
@@ -300,65 +314,92 @@ void* malloc(size_t size)
                         abort();
                     }
                     pthread_mutex_unlock(&mutex_malloc);
-                    return ((struct bloc*)((void*)bloc_origine_64 + (j + 1) * (64 + sizeof(struct bloc) )) )->adresse;
+                    return ((struct bloc *) ((void *) bloc_origine_64 + (j + 1) * (64 + sizeof(struct bloc))))->adresse;
                 }
                 j++;
             }
             j = 0;
         }
-        j = rand()%j128_max;
-        if(size < 128)
-        {
-            while( ( ((struct bloc*)((void*)bloc_origine_128 + j * ( 128 + sizeof(struct bloc)) ))->addr_next != (void*)NULL ) )
-            {
-                if( ((struct bloc*)((void*)bloc_origine_128 + (j + 1)* (128 + sizeof(struct bloc) )) )->numero == 0) // est-ce libre ?
+        j = rand() % j128_max;
+        if (size < 128) {
+            while ((((struct bloc *) ((void *) bloc_origine_128 + j * (128 + sizeof(struct bloc))))->addr_next !=
+                    (void *) NULL)) {
+                if (((struct bloc *) ((void *) bloc_origine_128 + (j + 1) * (128 + sizeof(struct bloc))))->numero ==
+                    0) // est-ce libre ?
                 {
-                    ((struct bloc*)((void*)bloc_origine_128 + (j + 1)* (128 + sizeof(struct bloc) )) )->numero = 1; //maintenant ca l'est plus
-                    if( ((struct bloc*)((void*)bloc_origine_128 + (j + 1) * (128 + sizeof(struct bloc) )) )->adresse == (void*)NULL)
-                    {
+                    ((struct bloc *) ((void *) bloc_origine_128 +
+                                      (j + 1) * (128 + sizeof(struct bloc))))->numero = 1; //maintenant ca l'est plus
+                    if (((struct bloc *) ((void *) bloc_origine_128 +
+                                          (j + 1) * (128 + sizeof(struct bloc))))->adresse == (void *) NULL) {
                         //printf("128 = NULL, abort()\n");
                         //perror("ici\n");
                         abort();
                     }
                     pthread_mutex_unlock(&mutex_malloc);
 
-                    return ((struct bloc*)((void*)bloc_origine_128 + (j + 1)* (128 + sizeof(struct bloc) )) )->adresse;
+                    return ((struct bloc *) ((void *) bloc_origine_128 +
+                                             (j + 1) * (128 + sizeof(struct bloc))))->adresse;
                 }
                 j++;
             }
             j = 0;
         }
-        j = rand()%j256_max;
-        if(size < 256)
-        {
-            while( ( ((struct bloc*)((void*)bloc_origine_256 + j * ( 256 + sizeof(struct bloc)) ))->addr_next != (void*)NULL ) )
-            {
-                if( ((struct bloc*)((void*)bloc_origine_256 + (j + 1)* (256 + sizeof(struct bloc) )) )->numero == 0) // est-ce libre ?
+        j = rand() % j256_max;
+        if (size < 256) {
+            while ((((struct bloc *) ((void *) bloc_origine_256 + j * (256 + sizeof(struct bloc))))->addr_next !=
+                    (void *) NULL)) {
+                if (((struct bloc *) ((void *) bloc_origine_256 + (j + 1) * (256 + sizeof(struct bloc))))->numero ==
+                    0) // est-ce libre ?
                 {
-                    ((struct bloc*)((void*)bloc_origine_256 + (j + 1)* (256 + sizeof(struct bloc) )) )->numero = 1; //maintenant ca l'est plus
-                    if( ((struct bloc*)((void*)bloc_origine_256 + (j + 1) * (256 + sizeof(struct bloc) )) )->adresse == (void*)NULL)
-                    {
+                    ((struct bloc *) ((void *) bloc_origine_256 +
+                                      (j + 1) * (256 + sizeof(struct bloc))))->numero = 1; //maintenant ca l'est plus
+                    if (((struct bloc *) ((void *) bloc_origine_256 +
+                                          (j + 1) * (256 + sizeof(struct bloc))))->adresse == (void *) NULL) {
                         //printf("256 = NULL, abort()\n");
                         //perror("ici\n");
                         abort();
                     }
                     pthread_mutex_unlock(&mutex_malloc);
 
-                    return ((struct bloc*)((void*)bloc_origine_256 + (j + 1)* (256 + sizeof(struct bloc) )) )->adresse;
+                    return ((struct bloc *) ((void *) bloc_origine_256 +
+                                             (j + 1) * (256 + sizeof(struct bloc))))->adresse;
                 }
                 j++;
             }
             j = 0;
         }
-        j = rand()%j512_max;
-        if (size < 512)
-        {
-            while( ( ((struct bloc*)((void*)bloc_origine_512 + j * ( 512 + sizeof(struct bloc)) ))->addr_next != (void*)NULL ) )
-            {
-                if( ((struct bloc*)((void*)bloc_origine_512 + (j + 1)* (512 + sizeof(struct bloc) )) )->numero == 0) // est-ce libre ?
+        j = rand() % j512_max;
+        if (size < 512) {
+            while ((((struct bloc *) ((void *) bloc_origine_512 + j * (512 + sizeof(struct bloc))))->addr_next !=
+                    (void *) NULL)) {
+                if (((struct bloc *) ((void *) bloc_origine_512 + (j + 1) * (512 + sizeof(struct bloc))))->numero ==
+                    0) // est-ce libre ?
                 {
-                    ((struct bloc*)((void*)bloc_origine_512 + (j + 1)* (512 + sizeof(struct bloc) )) )->numero = 1; //maintenant ca l'est plus
-                    if( ((struct bloc*)((void*)bloc_origine_512 + (j + 1) * (512 + sizeof(struct bloc) )) )->adresse == (void*)NULL)
+                    ((struct bloc *) ((void *) bloc_origine_512 +
+                                      (j + 1) * (512 + sizeof(struct bloc))))->numero = 1; //maintenant ca l'est plus
+                    if (((struct bloc *) ((void *) bloc_origine_512 +
+                                          (j + 1) * (512 + sizeof(struct bloc))))->adresse == (void *) NULL) {
+                        //printf("512 = NULL, abort()\n");
+                        //perror("ici\n");
+                        abort();
+                    }
+                    pthread_mutex_unlock(&mutex_malloc);
+
+                    return ((struct bloc *) ((void *) bloc_origine_512 +
+                                             (j + 1) * (512 + sizeof(struct bloc))))->adresse;
+                }
+                j++;
+            }
+            j = 0;
+        }
+        j = rand()%j1024_max;
+        if (size < 1024) {
+            while((((struct bloc *) ((void *) bloc_origine_1024 + j * (1024 + sizeof(struct bloc))))->addr_next != (void *) NULL))
+            {
+                if (((struct bloc *) ((void *) bloc_origine_1024 + (j + 1) * (1024 + sizeof(struct bloc))))->numero == 0) // est-ce libre ?
+                {
+                    ((struct bloc *) ((void *) bloc_origine_1024 + (j + 1) * (1024 + sizeof(struct bloc))))->numero = 1; //maintenant ca l'est plus
+                    if (((struct bloc *) ((void *) bloc_origine_1024 + (j + 1) * (1024 + sizeof(struct bloc))))->adresse == (void *) NULL)
                     {
                         //printf("512 = NULL, abort()\n");
                         //perror("ici\n");
@@ -366,15 +407,15 @@ void* malloc(size_t size)
                     }
                     pthread_mutex_unlock(&mutex_malloc);
 
-                    return ((struct bloc*)((void*)bloc_origine_512 + (j + 1)* (512 + sizeof(struct bloc) )) )->adresse;
+                    return ((struct bloc *) ((void *) bloc_origine_1024 + (j + 1) * (1024 + sizeof(struct bloc))))->adresse;
                 }
                 j++;
             }
-            j=0;
+            j = 0;
         }
-        else //probleme pour les free() et le recyclage, munmap
+
+        else // si on est la c'est qu'il n'y a plus aucun bloc disponible, on pourrait faire un nouveau gros mmap() et rajouter des blocs dans les bloc_origines_xxxx, e, prenant garde a ne pas depasser les capacites de la machine
         {
-            //trouver le dernier bloc de metadonnée, puis modifier son next_addr
             ret_ptr_huge = mmap(NULL, sizeof(struct bloc) + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             bloc_origine_huge = ret_ptr_huge;
             bloc_origine_huge->taille = size + sizeof(struct bloc);
@@ -397,14 +438,15 @@ void* malloc(size_t size)
         }
     }
 
-
 }
+
+
 static pthread_mutex_t mutex_free = PTHREAD_MUTEX_INITIALIZER;
 void free(void* ptr)
 {
     //printf("indice : %d\n",indice);
     //printf("addr de bloc origine 64 : %p\n",bloc_origine_64);
-    //printf("free ok\n");
+    //printf("entree dans free :");
     pthread_mutex_lock(&mutex_free);
     //printf("entre dans le free ptr_addr = %p\n",ptr); // parfois le ptr est NULL ou plutot nil ! c'est ca le blem !
     if(ptr == NULL)
@@ -415,8 +457,9 @@ void free(void* ptr)
     }
     struct bloc* tmp_bloc = (void*)ptr - sizeof(struct bloc); //des fois, ça crée une segfault SIGSEGV
     tmp_bloc->numero=0;
+    //printf("taille : %d",tmp_bloc->taille);0
     //printf("taille + 40 = %u\n",tmp_bloc->taille);
-    if(tmp_bloc->taille > (512 + sizeof(struct bloc)) )
+    if(tmp_bloc->taille > (1024 + sizeof(struct bloc)) )
     {
         //printf("avant munmap\n");
         munmap(tmp_bloc, tmp_bloc->taille);
@@ -427,6 +470,8 @@ void free(void* ptr)
     pthread_mutex_unlock(&mutex_free);
     return (void)0;
 }
+
+
 static pthread_mutex_t mutex_calloc = PTHREAD_MUTEX_INITIALIZER;
 void* calloc(size_t nmemb, size_t size)
     {
@@ -481,8 +526,12 @@ void* realloc(void* ptr, size_t size)
     return ret;
 }
 
+
+static pthread_mutex_t mutex_reallocarray = PTHREAD_MUTEX_INITIALIZER;
 void* reallocarray(void* ptr, size_t nmemb, size_t size)
 {
+    pthread_mutex_lock(&mutex_reallocarray);
     void* ret = realloc(ptr, nmemb * size);
+    pthread_mutex_unlock(&mutex_reallocarray);
     return ret;
 }
