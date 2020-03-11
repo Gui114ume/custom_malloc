@@ -68,14 +68,14 @@ Dans les grandes lignes, le premier appel à malloc() appelle mmap() plusieurs f
 
 La taille des métadonnées est fixe, mais la taille de la zone inscriptible peut-être de 64, 128, 256, 512, 1024 bytes. Nous créons ainsi plusieurs liste chainées, chacune permettant de rechercher un bloc de taille 64, 128, 256, 512, 1024 et ainsi de "recycler" les blocs, c'est à dire donner à l'utilisateur l'un de ceux-ci.
 
-	struct bloc 
-	{
-    		void* adresse;
-    		void* addr_previous;
-   		void* addr_next;
-  		int numero;
-    		unsigned int taille;
-	};
+		struct bloc 
+		{
+    			void* adresse;
+    			void* addr_previous;
+   			void* addr_next;
+  			int numero;
+    			unsigned int taille;
+		};
 
 La liste chainé est en forme d'anneau, le bloc qui suit le dernier bloc, est le premier bloc.
 
