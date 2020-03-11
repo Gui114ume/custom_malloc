@@ -61,15 +61,29 @@ Ces fonctions peuvent être utilisés en remplacement des fonctions de la librai
 
 Nous allons maintenant décrire la manière dont fonctionne malloc, le code des autres fonctions est très facile à lire et à comprendre. 
 
+Dans les grandes lignes, le premier appel à malloc() appelle mmap() plusieurs fois, et crée des éléments composés : 
 
-	struct bloc // taille 40 octets
+* des métadonnées du bloc
+* de la zone inscriptible que l'on appellera le bloc, utilisé par l'appelant de malloc 
+
+La taille des métadonnées est fixe, mais la taille de la zone inscriptible peut-être de 64, 128, 256, 512, 1024 bytes. Nous créons ainsi plusieurs liste chainées, chacune permettant de rechercher un bloc de taille 64, 128, 256, 512, 1024 et ainsi de "recycler" les blocs, c'est à dire donner à l'utilisateur l'un de ceux-ci.
+
+	struct bloc 
 	{
     		void* adresse;
-    		void* addr_previous; 
+    		void* addr_previous;
    		void* addr_next;
   		int numero;
     		unsigned int taille;
 	};
+
+La liste chainé est en forme d'anneau, le bloc qui suit le dernier bloc, est le premier bloc.
+
+Lorsque l'utilisateur demande de la mémoire, on parcours la liste chainé ( on saute de bloc en bloc), afin d'en trouver un libre à lui fournir. Pour cela nous utilisons l'attribut numero de la structure bloc. Si on en trouve un libre, on le marque occupé, et on le donne. Si on a fait le tour de l'anneau sans rien trouver, on utilise mmap() et on agrandi la liste chainée, puis on en choisi un à envoyer.
+
+La méthode pour rechercher un bloc libre est de commencer à chercher à partir du bloc dernièrement alloué, de la taille demandée. 
+
+Dans le cas où l'utilisateur demanderait plus de 1024 bytes, on lui alloue une zone mémoire avec un mmap(). Cette zone mémoire ne sera d'ailleurs pas recyclé. Lors d'un appel à free, celui-ci sera munmappé et non pas marqué comme libre. // je recycle ou pas ? je découpe en petit morceau ?
 
 
 
