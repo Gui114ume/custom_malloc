@@ -41,6 +41,18 @@ struct bloc // taille 40 octets
     int numero;// 0 -> libre , 1 -> occupé
     unsigned int taille;
 };
+#define COUNTER
+
+#ifdef COUNTER
+static unsigned long long nb_malloc = 0;
+static unsigned long long nb_free = 0;
+static unsigned long long nb_calloc = 0;
+static unsigned long long nb_realloc = 0;
+static unsigned long long nb_mmap = 0;
+static unsigned long long nb_munmap = 0;
+static unsigned long long nb_recyclage = 0;
+#endif
+
 
 //pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 //malloc de plus d'une page -> mmap . Puis quand il est free, munmap.
@@ -79,6 +91,9 @@ static pthread_mutex_t mutex_malloc = PTHREAD_MUTEX_INITIALIZER;
 void* malloc(size_t size)
 {
     pthread_mutex_lock(&mutex_malloc);
+#ifdef COUNTER
+    nb_malloc += 1;
+#endif
     //printf("entrée dans le malloc\n");
 
     void* ret_ptr64 = NULL;
@@ -105,6 +120,9 @@ void* malloc(size_t size)
         t512 = 2 << 25;
         t1024 = 2 << 25;
 
+#ifdef COUNTER
+        nb_mmap += 5;
+#endif
         //ce serait intelligent que l'on mmap de moins grosse donnees, mais qu'à la fin, quand on arrive pas a trouver un bloc a donner, on recommence a mmaper, ainsi pu de pbleme si plusieurs processus utilise mon allocateur en meme temps
         ret_ptr64  = mmap(NULL, t64 , PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         ret_ptr128 = mmap(NULL, t128, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -323,8 +341,11 @@ void* malloc(size_t size)
             return ret_ptr1024;
         }
 
-        else
+        else  // c'est dommage de ne pas recycler les grosses zones alloues, soit en le gardant tel quel, soit en le decoupant en morceau plus petit, mais si un prog fait des gros mmap, on est mort, on va mapper a chaque fois et recycler inutilement
         {
+#ifdef COUNTER
+            nb_mmap += 1;
+#endif
             ret_ptr_huge = mmap(NULL, sizeof(struct bloc) + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             bloc_origine_huge = ret_ptr_huge;
             bloc_origine_huge->numero = 1;
@@ -373,6 +394,9 @@ void* malloc(size_t size)
                         //perror("ici\n");
                         abort();
                     }
+#ifdef COUNTER
+                    nb_recyclage += 1;
+#endif
                     void *ret = next64;
                     next64 = ((struct bloc *) ((void *) next64 - sizeof(struct bloc)))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
@@ -387,6 +411,9 @@ void* malloc(size_t size)
         if(size < 64 )
         {
         int i = 0;
+#ifdef COUNTER
+        nb_mmap += 1;
+#endif
         struct bloc* tmp_bloc = mmap(NULL, t64,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         while( t64 > sizeof(struct bloc) + 64 )// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
             //non rien  ici !!
@@ -446,6 +473,9 @@ void* malloc(size_t size)
                         //perror("ici\n");
                         abort();
                     }
+#ifdef COUNTER
+                    nb_recyclage += 1;
+#endif
                     void *ret = next128;
                     next128 = ((struct bloc *) ((void *)next128 - sizeof(struct bloc)))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
@@ -462,6 +492,9 @@ void* malloc(size_t size)
         {
 
             int i = 0;
+#ifdef COUNTER
+            nb_mmap += 1;
+#endif
             struct bloc *tmp_bloc = mmap(NULL, t128,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             while (t128 > sizeof(struct bloc) + 128)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
@@ -515,6 +548,9 @@ void* malloc(size_t size)
                         //perror("ici\n");
                         abort();
                     }
+#ifdef COUNTER
+                    nb_recyclage += 1;
+#endif
                     void *ret = next256;
                     next256 = ((struct bloc *) ((void *) next256 - sizeof(struct bloc)))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
@@ -533,6 +569,9 @@ void* malloc(size_t size)
         if(size < 256)
         {
             int i = 0;
+#ifdef COUNTER
+            nb_mmap += 1;
+#endif
             struct bloc *tmp_bloc = mmap(NULL, t256,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             while (t256 > sizeof(struct bloc) + 256)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
@@ -587,6 +626,9 @@ void* malloc(size_t size)
                         //perror("ici\n");
                         abort();
                     }
+#ifdef COUNTER
+                    nb_recyclage += 1;
+#endif
                     void *ret = next512;
                     next512 = ((struct bloc *) ((void *) next512 - sizeof(struct bloc)))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
@@ -602,6 +644,9 @@ void* malloc(size_t size)
         if(size < 512 )
         {
             int i = 0;
+#ifdef COUNTER
+            nb_mmap += 1;
+#endif
             struct bloc *tmp_bloc = mmap(NULL, t512, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             while (t512 > sizeof(struct bloc) + 512)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
@@ -655,6 +700,9 @@ void* malloc(size_t size)
                         //perror("ici\n");
                         abort();
                     }
+#ifdef COUNTER
+                    nb_recyclage += 1;
+#endif
                     void *ret = next1024;
                     next1024 = ((struct bloc *) ((void *) next1024 - sizeof(struct bloc)))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
@@ -670,6 +718,9 @@ void* malloc(size_t size)
         if(size < 1024 )
         {
             int i = 0;
+#ifdef COUNTER
+            nb_mmap += 1;
+#endif
             struct bloc *tmp_bloc = mmap(NULL, t1024,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             while (t1024 > sizeof(struct bloc) + 1024)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
@@ -706,6 +757,9 @@ void* malloc(size_t size)
         else // si on est la c'est qu'il n'y a plus aucun bloc disponible, on pourrait faire un nouveau gros mmap() (si size est < 1024 sinon mmpa)
         // et rajouter des blocs dans les bloc_origines_xxxx, e, prenant garde a ne pas depasser les capacites de la machine
         {
+#ifdef COUNTER
+            nb_mmap += 1;
+#endif
             ret_ptr_huge = mmap(NULL, sizeof(struct bloc) + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             bloc_origine_huge = ret_ptr_huge;
             bloc_origine_huge->taille = size + sizeof(struct bloc);
@@ -738,6 +792,9 @@ void free(void* ptr)
     //printf("addr de bloc origine 64 : %p\n",bloc_origine_64);
     //printf("entree dans free :");
     pthread_mutex_lock(&mutex_free);
+#ifdef COUNTER
+    nb_free += 1;
+#endif
     //printf("entre dans le free ptr_addr = %p\n",ptr); // parfois le ptr est NULL ou plutot nil ! c'est ca le blem !
     if(ptr == NULL)
     {
@@ -753,10 +810,14 @@ void free(void* ptr)
     if(tmp_bloc->taille > (1024 + sizeof(struct bloc)) )
     {
         //printf("avant munmap\n");
+#ifdef COUNTER
+        nb_munmap += 1;
+#endif
         munmap(tmp_bloc, tmp_bloc->taille);
+        pthread_mutex_unlock(&mutex_free);
+        return (void)0;
         //printf("apres munmap\n");
     }
-
     //printf("sort du free\n");
     pthread_mutex_unlock(&mutex_free);
     return (void)0;
@@ -767,6 +828,9 @@ static pthread_mutex_t mutex_calloc = PTHREAD_MUTEX_INITIALIZER;
 void* calloc(size_t nmemb, size_t size)
     {
     pthread_mutex_lock(&mutex_calloc);
+#ifdef COUNTER
+    nb_calloc += 1;
+#endif
     if( nmemb == 0 || size == 0) {
         pthread_mutex_unlock(&mutex_calloc);
         return (void *)NULL;
@@ -786,6 +850,10 @@ void* realloc(void* ptr, size_t size)
 {
     //printf("entree dans realloc\n");
     pthread_mutex_lock(&mutex_realloc);
+#ifdef COUNTER
+    nb_realloc += 1;
+#endif
+
     if(ptr == (void*)NULL)
     {
         void* ret = malloc(size);
@@ -826,4 +894,24 @@ void* reallocarray(void* ptr, size_t nmemb, size_t size)
     void* ret = realloc(ptr, nmemb * size);
     pthread_mutex_unlock(&mutex_reallocarray);
     return ret;
+}
+
+void get_stat() __attribute__((destructor));
+//void print_hello() __attribute__((constructor));
+
+void get_stat()
+{
+    printf("nb_malloc : %llu\n",nb_malloc);
+    printf("nb_free : %llu\n",nb_free);
+    printf("nb_realloc : %llu\n",nb_realloc);
+    printf("nb_calloc : %llu\n",nb_calloc);
+    printf("nb_recyclage : %llu\n",nb_recyclage);
+    printf("nb_mmap : %llu\n",nb_mmap);
+    printf("nb_munmap : %llu\n",nb_munmap);
+    return (void)0;
+}
+
+void print_hello()
+{
+    printf("hello !\n");
 }
