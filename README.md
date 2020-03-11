@@ -16,7 +16,7 @@ Fonctionnement de la mémoire : point de vue utilisateur
 -------------------------------------------------------
 
 
-La fonction malloc ( et les autres fonctions utilisés lors de la gestion mémoire), n'est plus aussi 'magique' qu'auparavent, dès lors que l'on s'intéresse à ce qu'il se passe lors d'un appel à malloc( size ). Il faut cependant prendre le temps de comprendre quelques concepts. 
+La fonction malloc ( et les autres fonctions utilisés lors de la gestion mémoire), n'est plus aussi 'magique' qu'auparavant, dès lors que l'on s'intéresse à ce qu'il se passe lors d'un appel à malloc( size ). Il faut cependant prendre le temps de comprendre quelques concepts. 
 
 * La mémoire virtuelle
 
