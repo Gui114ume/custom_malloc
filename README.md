@@ -53,9 +53,23 @@ Elle dispose également d'une fonction get_stat(), permettant de connaitre les i
 * nombre de mmap() utilisé
 * nombre de munmap() utilisé
 
+Elle est rendu thread-safe par l'utilsation de mutex. Les fonctions cité précédemment lockent un mutex_"nom_de_focntion" dès l'entrée dans la fonction, puis le relâche avant de return.
+
 Ces fonctions peuvent être utilisés en remplacement des fonctions de la librairie standard, soit en compilant son programme contre la librairie, soit en faisant une interposition de symbole grâce au chargement dynamique de librairie ( LD_PRELOAD ).
 
 
+
+Nous allons maintenant décrire la manière dont fonctionne malloc, le code des autres fonctions est très facile à lire et à comprendre. 
+
+
+	struct bloc // taille 40 octets
+	{
+    		void* adresse;
+    		void* addr_previous; 
+   		void* addr_next;
+  		int numero;
+    		unsigned int taille;
+	};
 
 
 
