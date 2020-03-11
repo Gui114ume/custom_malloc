@@ -79,7 +79,7 @@ La taille des métadonnées est fixe, mais la taille de la zone inscriptible peu
 
 La liste chainé est en forme d'anneau, le bloc qui suit le dernier bloc, est le premier bloc.
 
-Lorsque l'utilisateur demande de la mémoire, on parcours la liste chainé ( on saute de bloc en bloc), afin d'en trouver un libre à lui fournir. Pour cela nous utilisons l'attribut numero de la structure bloc. Si on en trouve un libre, on le marque occupé, et on le donne. Si on a fait le tour de l'anneau sans rien trouver, on utilise mmap() et on agrandi la liste chainée, puis on en choisi un à envoyer.
+Lorsque l'utilisateur demande de la mémoire, on parcours la liste chainé ( on saute de bloc en bloc), afin d'en trouver un libre à lui fournir. Pour cela nous utilisons l'attribut numero de la structure bloc. Si on en trouve un libre, on le marque occupé, et on le donne. Si on a fait le tour de l'anneau sans rien trouver, on utilise mmap() et on agrandi la liste chainée, puis on choisi un bloc à envoyer.
 
 La méthode pour rechercher un bloc libre est de commencer à chercher à partir du bloc dernièrement alloué, de la taille demandée. 
 
