@@ -93,7 +93,15 @@ Complexité des algorithmes
 Comparaison des performances
 ----------------------------
 
+Les programmes de benchmark sont disponible sur le github dont le lien est situé en haut de page.
 
+
+Ce qui n'a pas encore été implémenté
+------------------------------------
+
+* L'alignement mémoire sur 64 octets
+* La libération de zones mémoires mmapé mais pas utilisé par le processus concerné
+* Le recyclage des zones mémoires réservé par l'utilisateur lors d'un appel à malloc( size > 1024 )
 
 
 Sources
