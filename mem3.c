@@ -53,6 +53,13 @@ static unsigned long long nb_munmap = 0;
 static unsigned long long nb_recyclage = 0;
 #endif
 
+static int sizeof_struct_bloc; // = 8 ;//sizeof(struct bloc);
+static int sizeof_bloc_and_writable_space_64;// = 64 + sizeof_struct_bloc;
+static int sizeof_bloc_and_writable_space_128; // = 128 + sizeof_struct_bloc;
+static int sizeof_bloc_and_writable_space_256; // = 256  + sizeof_struct_bloc;
+static int sizeof_bloc_and_writable_space_512; // = 512 + sizeof_struct_bloc;
+static int sizeof_bloc_and_writable_space_1024; //= 1024 + sizeof_struct_bloc;
+
 
 //pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 //malloc de plus d'une page -> mmap . Puis quand il est free, munmap.
@@ -64,6 +71,7 @@ struct bloc* bloc_origine_256 = NULL;
 struct bloc* bloc_origine_512 = NULL;
 struct bloc* bloc_origine_1024 = NULL;
 struct bloc* bloc_origine_huge = NULL;
+
 
 static unsigned int t64 = 0;
 static unsigned int t128 = 0;
@@ -110,12 +118,17 @@ void* malloc(size_t size)
     //pthread_mutex_unlock(&mutex);
     if(indice == 0)
     {
-
+        sizeof_struct_bloc = sizeof(struct bloc);
+        sizeof_bloc_and_writable_space_64 = 64 + sizeof_struct_bloc;
+        sizeof_bloc_and_writable_space_128 = 128 + sizeof_struct_bloc;
+        sizeof_bloc_and_writable_space_256 = 256 + sizeof_struct_bloc;
+        sizeof_bloc_and_writable_space_512 = 512 + sizeof_struct_bloc;
+        sizeof_bloc_and_writable_space_1024 = 1024 + sizeof_struct_bloc;
         indice =1;
         //pthread_mutex_lock(&mutex);
         //creation de la liste chainé a l'aide d'un gros mmap
         t64  = 2 << 25;   //  = 2 >> 25
-        t128 = 2 << 25;
+        t128 = 2 << 25;  // grace a ca , je sais qu'il y a un pbleme pendant l'agrandissement de la liste chainé
         t256 = 2 << 25;  // 130 MB
         t512 = 2 << 25;
         t1024 = 2 << 25;
@@ -141,28 +154,28 @@ void* malloc(size_t size)
         // faire un recyclage par une boucle while en cas d'appel a malloc pour une huge size
 
         int i = 0;
-        while( t64 > sizeof(struct bloc) + 64 )// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
+        while( t64 > sizeof_struct_bloc + 64 )// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
             //non rien  ici !!
         {
-            ((struct bloc*)((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )))->adresse       = ((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-            ((struct bloc*)((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )))->addr_previous = (((struct bloc*)((void*)bloc_origine_64 + i * (64 +
-                    sizeof(struct bloc) )))->adresse == ret_ptr64 + sizeof(struct bloc)  ) ? NULL : ((struct bloc*)((void*)bloc_origine_64 + i * (64 +
-                sizeof(struct bloc)) ))->adresse - 64 - sizeof(struct bloc);  // on ne met plus de null, on est maintenant sur un anneau
-            ((struct bloc*)((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )))->addr_next     = ((struct bloc*)((void*)bloc_origine_64 + i * (64 + sizeof(struct bloc) )))->adresse + sizeof(struct bloc) + 64;
-            ((struct bloc*)((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )))->taille = 64 + sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )))->numero = 0;
+            ((struct bloc*)((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )))->adresse       = ((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+            ((struct bloc*)((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )))->addr_previous =  ((struct bloc*)((void*)bloc_origine_64 + i * (64 +
+                sizeof_struct_bloc) ))->adresse - 64 - sizeof_struct_bloc;  // on ne met plus de null, on est maintenant sur un anneau
+            ((struct bloc*)((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )))->addr_next     = ((struct bloc*)((void*)bloc_origine_64 + i * (sizeof_bloc_and_writable_space_64 )))->adresse + sizeof_struct_bloc + 64;
+            ((struct bloc*)((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )))->taille = sizeof_bloc_and_writable_space_64;
+            ((struct bloc*)((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )))->numero = 0;
 
-            if(((struct bloc*)((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )))->adresse  == (void*)NULL) //ok cest pas null
+            if(((struct bloc*)((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )))->adresse  == (void*)NULL) //ok cest pas null
                 exit(-1);
-            if(((struct bloc*)((void*)bloc_origine_64 + i * ( 64 + sizeof(struct bloc) )))->addr_next == (void*)NULL  )//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
+            if(((struct bloc*)((void*)bloc_origine_64 + i * ( sizeof_bloc_and_writable_space_64 )))->addr_next == (void*)NULL  )//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
                 exit(-1);
-            t64 -= (sizeof(struct bloc) + 64);
+            t64 -= (sizeof_struct_bloc + 64);
             ++i;
         }
         j64_max = i;
 
-        ((struct bloc*)((void*)bloc_origine_64 + (i - 1)* ( 64 + sizeof(struct bloc) )))->addr_next     = bloc_origine_64->adresse;
-        bloc_origine_64->addr_previous = ((struct bloc*)((void*)bloc_origine_64 + (i - 1)* ( 64 + sizeof(struct bloc) )))->adresse;
+        ((struct bloc*)((void*)bloc_origine_64 + (i - 1)* ( sizeof_bloc_and_writable_space_64 )))->addr_next     = bloc_origine_64->adresse;
+        bloc_origine_64->addr_previous = ((struct bloc*)((void*)bloc_origine_64 + (i - 1)* ( sizeof_bloc_and_writable_space_64 )))->adresse;
+
 
         //comme on conserve i, on pourra après la boucle while, mettre à jour le dernier bloc de metadonnée et ainsi mettre NULL dans le dernier addr_next, sans utilisé de variable ADDR_FINALE_XXXX
         // IMPORTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANT
@@ -170,88 +183,84 @@ void* malloc(size_t size)
 
         i = 0;
 
-        while( t128 > sizeof(struct bloc) + 128 )
+        while( t128 > sizeof_struct_bloc + 128 )
         {
             //c'est ca qu'il faut ecrire  la ou il faut, on caste en void* pour decaller le pointeur correctement, puis on recaste en struct bloc* pour acceder aux champs des structures
-            ((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )))->adresse      = ((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-            ((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )))->addr_previous = (((struct bloc*)((void*)bloc_origine_128 + i * ( 128 +
-                    sizeof(struct bloc) )))->adresse == ret_ptr128 + sizeof(struct bloc) ) ? NULL : ((struct bloc*)((void*)bloc_origine_128 + i * (128 +
-                sizeof(struct bloc)) ))->adresse - 128 - sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )))->addr_next     =  ((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc)) ))->adresse + sizeof(struct bloc) + 128;
-            ((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )))->taille = 128 + sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )))->numero = 0;
+            ((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )))->adresse      = ((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+            ((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )))->addr_previous =  ((struct bloc*)((void*)bloc_origine_128 + i * (128 +
+                sizeof_struct_bloc) ))->adresse - 128 - sizeof_struct_bloc;
+            ((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )))->addr_next     =  ((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128) ))->adresse + sizeof_struct_bloc + 128;
+            ((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )))->taille = sizeof_bloc_and_writable_space_128;
+            ((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )))->numero = 0;
 
-            if(((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )))->adresse  == (void*)NULL) //ok cest pas null
+            if(((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )))->adresse  == (void*)NULL) //ok cest pas null
                 exit(-1);
-            if(((struct bloc*)((void*)bloc_origine_128 + i * ( 128 + sizeof(struct bloc) )))->addr_next == (void*)NULL  )//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
+            if(((struct bloc*)((void*)bloc_origine_128 + i * ( sizeof_bloc_and_writable_space_128 )))->addr_next == (void*)NULL  )//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
                 exit(-1);
-            t128 -= (sizeof(struct bloc) + 128);
+            t128 -= (sizeof_struct_bloc + 128);
             ++i;
         }
 
         j128_max = i;
-        ((struct bloc*)((void*)bloc_origine_128 + (i - 1)* ( 128 + sizeof(struct bloc) )))->addr_next     = bloc_origine_128->adresse;
-        bloc_origine_128->addr_previous = ((struct bloc*)((void*)bloc_origine_128 + (i - 1)* ( 128 + sizeof(struct bloc) )))->adresse;
+        ((struct bloc*)((void*)bloc_origine_128 + (i - 1)* ( sizeof_bloc_and_writable_space_128 )))->addr_next     = bloc_origine_128->adresse;
+        bloc_origine_128->addr_previous = ((struct bloc*)((void*)bloc_origine_128 + (i - 1)* ( sizeof_bloc_and_writable_space_128 )))->adresse;
 
 
         i = 0;
 
-        while( t256 > sizeof(struct bloc) + 256 )
+        while( t256 > sizeof_struct_bloc + 256 )
         {
-            ((struct bloc*)((void*)bloc_origine_256 + i * ( 256 + sizeof(struct bloc) )))->adresse       = ((void*)bloc_origine_256 + i * ( 256 + sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-            ((struct bloc*)((void*)bloc_origine_256 + i * ( 256 + sizeof(struct bloc) )))->addr_previous = (((struct bloc*)((void*)bloc_origine_256 + i * (256 +
-                    sizeof(struct bloc)) ))->adresse == ret_ptr256 + sizeof(struct bloc) ) ? NULL : ((struct bloc*)((void*)bloc_origine_256 + i * ( 256 +
-                sizeof(struct bloc)) ))->adresse - 256 - sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_256 + i * ( 256 + sizeof(struct bloc) )))->addr_next     =((struct bloc*)((void*)bloc_origine_256 + i * (256 + sizeof(struct bloc)) ))->adresse + sizeof(struct bloc) + 256;
-            ((struct bloc*)((void*)bloc_origine_256 + i * ( 256 + sizeof(struct bloc) )))->taille = 256 + sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_256 + i * ( 256 + sizeof(struct bloc) )))->numero = 0;
+            ((struct bloc*)((void*)bloc_origine_256 + i * ( sizeof_bloc_and_writable_space_256 )))->adresse       = ((void*)bloc_origine_256 + i * ( sizeof_bloc_and_writable_space_256 )) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+            ((struct bloc*)((void*)bloc_origine_256 + i * ( sizeof_bloc_and_writable_space_256 )))->addr_previous =  ((struct bloc*)((void*)bloc_origine_256 + i * ( 256 +
+                sizeof_struct_bloc) ))->adresse - 256 - sizeof_struct_bloc;
+            ((struct bloc*)((void*)bloc_origine_256 + i * ( sizeof_bloc_and_writable_space_256 )))->addr_next     =((struct bloc*)((void*)bloc_origine_256 + i * (sizeof_bloc_and_writable_space_256) ))->adresse + sizeof_struct_bloc + 256;
+            ((struct bloc*)((void*)bloc_origine_256 + i * ( sizeof_bloc_and_writable_space_256 )))->taille = sizeof_bloc_and_writable_space_256;
+            ((struct bloc*)((void*)bloc_origine_256 + i * ( sizeof_bloc_and_writable_space_256 )))->numero = 0;
 
-            t256 -= (sizeof(struct bloc) + 256);
+            t256 -= (sizeof_struct_bloc + 256);
             ++i;
         }
 
 
         j256_max = i;
-        ((struct bloc*)((void*)bloc_origine_256 + (i - 1)* ( 256 + sizeof(struct bloc) )))->addr_next     = bloc_origine_256->adresse;
-        bloc_origine_256->addr_previous = ((struct bloc*)((void*)bloc_origine_256 + (i - 1)* ( 256 + sizeof(struct bloc) )))->adresse;
+        ((struct bloc*)((void*)bloc_origine_256 + (i - 1)* ( sizeof_bloc_and_writable_space_256 )))->addr_next     = bloc_origine_256->adresse;
+        bloc_origine_256->addr_previous = ((struct bloc*)((void*)bloc_origine_256 + (i - 1)* ( sizeof_bloc_and_writable_space_256 )))->adresse;
         i = 0;
 
-        while( t512 > sizeof(struct bloc) + 512 )
+        while( t512 > sizeof_struct_bloc + 512 )
         {
-            ((struct bloc*)((void*)bloc_origine_512 + i * ( 512 + sizeof(struct bloc) )))->adresse       = ((void*)bloc_origine_512 + i * ( 512 + sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-            ((struct bloc*)((void*)bloc_origine_512 + i * ( 512 + sizeof(struct bloc) )))->addr_previous = (((struct bloc*)((void*)bloc_origine_512 + i * ( 512 +
-                    sizeof(struct bloc)) ))->adresse == ret_ptr512 + sizeof(struct bloc) ) ? NULL : ((struct bloc*)((void*)bloc_origine_512 + i * (512 +
-                sizeof(struct bloc)) ))->adresse - 512 - sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_512 + i * ( 512 + sizeof(struct bloc) )))->addr_next     = ((struct bloc*)((void*)bloc_origine_512 + i * (512 + sizeof(struct bloc)) ))->adresse + sizeof(struct bloc) + 512;
-            ((struct bloc*)((void*)bloc_origine_512 + i * ( 512 + sizeof(struct bloc) )))->taille = 512 + sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_512 + i * ( 512 + sizeof(struct bloc) )))->numero = 0;
+            ((struct bloc*)((void*)bloc_origine_512 + i * ( sizeof_bloc_and_writable_space_512 )))->adresse       = ((void*)bloc_origine_512 + i * ( sizeof_bloc_and_writable_space_512 )) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+            ((struct bloc*)((void*)bloc_origine_512 + i * ( sizeof_bloc_and_writable_space_512 )))->addr_previous =  ((struct bloc*)((void*)bloc_origine_512 + i * (512 +
+                sizeof_struct_bloc) ))->adresse - 512 - sizeof_struct_bloc;
+            ((struct bloc*)((void*)bloc_origine_512 + i * ( sizeof_bloc_and_writable_space_512 )))->addr_next     = ((struct bloc*)((void*)bloc_origine_512 + i * (sizeof_bloc_and_writable_space_512) ))->adresse + sizeof_struct_bloc + 512;
+            ((struct bloc*)((void*)bloc_origine_512 + i * ( sizeof_bloc_and_writable_space_512 )))->taille = sizeof_bloc_and_writable_space_512;
+            ((struct bloc*)((void*)bloc_origine_512 + i * ( sizeof_bloc_and_writable_space_512 )))->numero = 0;
 
-            t512 -= (sizeof(struct bloc) + 512);
+            t512 -= (sizeof_struct_bloc + 512);
             ++i;
         }
         j512_max = i;
-        ((struct bloc*)((void*)bloc_origine_512 + (i - 1)* ( 512 + sizeof(struct bloc) )))->addr_next     = bloc_origine_512->adresse;
-        bloc_origine_512->addr_previous = ((struct bloc*)((void*)bloc_origine_512 + (i - 1)* ( 512 + sizeof(struct bloc) )))->adresse;
+        ((struct bloc*)((void*)bloc_origine_512 + (i - 1)* ( sizeof_bloc_and_writable_space_512 )))->addr_next     = bloc_origine_512->adresse;
+        bloc_origine_512->addr_previous = ((struct bloc*)((void*)bloc_origine_512 + (i - 1)* ( sizeof_bloc_and_writable_space_512 )))->adresse;
         i=0;
 
 
-        while( t1024 > sizeof(struct bloc) + 1024 )
+        while( t1024 > sizeof_struct_bloc + 1024 )
         {
-            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->adresse       = ((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->addr_previous = (((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 +
-                    sizeof(struct bloc)) ))->adresse == ret_ptr1024 + sizeof(struct bloc) ) ? NULL : ((struct bloc*)((void*)bloc_origine_1024 + i * (1024 +
-                            sizeof(struct bloc)) ))->adresse - 1024 - sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->addr_next     = ((struct bloc*)((void*)bloc_origine_1024 + i * (1024 + sizeof(struct bloc)) ))->adresse + sizeof(struct bloc) + 1024;
-            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->taille = 1024 + sizeof(struct bloc);
-            ((struct bloc*)((void*)bloc_origine_1024 + i * ( 1024 + sizeof(struct bloc) )))->numero = 0;
+            ((struct bloc*)((void*)bloc_origine_1024 + i * (sizeof_bloc_and_writable_space_1024 )))->adresse       = ((void*)bloc_origine_1024 + i * (sizeof_bloc_and_writable_space_1024 )) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+            ((struct bloc*)((void*)bloc_origine_1024 + i * (sizeof_bloc_and_writable_space_1024 )))->addr_previous =  ((struct bloc*)((void*)bloc_origine_1024 + i * (1024 +
+                            sizeof_struct_bloc) ))->adresse - 1024 - sizeof_struct_bloc;
+            ((struct bloc*)((void*)bloc_origine_1024 + i * (sizeof_bloc_and_writable_space_1024 )))->addr_next     = ((struct bloc*)((void*)bloc_origine_1024 + i * (sizeof_bloc_and_writable_space_1024 )))->adresse + sizeof_struct_bloc + 1024;
+            ((struct bloc*)((void*)bloc_origine_1024 + i * (sizeof_bloc_and_writable_space_1024 )))->taille =sizeof_bloc_and_writable_space_1024;
+            ((struct bloc*)((void*)bloc_origine_1024 + i * (sizeof_bloc_and_writable_space_1024 )))->numero = 0;
 
-            t1024 -= (sizeof(struct bloc) + 1024);
+            t1024 -= (sizeof_struct_bloc + 1024);
             ++i;
         }
 
         j1024_max = i;
-        ((struct bloc*)((void*)bloc_origine_1024 + (i - 1)* ( 1024 + sizeof(struct bloc) )))->addr_next     = bloc_origine_1024->adresse;
-        bloc_origine_1024->addr_previous = ((struct bloc*)((void*)bloc_origine_1024 + (i - 1)* ( 1024 + sizeof(struct bloc) )))->adresse;
+        ((struct bloc*)((void*)bloc_origine_1024 + (i - 1)* (sizeof_bloc_and_writable_space_1024 )))->addr_next     = bloc_origine_1024->adresse;
+        bloc_origine_1024->addr_previous = ((struct bloc*)((void*)bloc_origine_1024 + (i - 1)* (sizeof_bloc_and_writable_space_1024 )))->adresse;
         i = 0;
 
         if( size < 64 )
@@ -346,13 +355,13 @@ void* malloc(size_t size)
 #ifdef COUNTER
             nb_mmap += 1;
 #endif
-            ret_ptr_huge = mmap(NULL, sizeof(struct bloc) + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            ret_ptr_huge = mmap(NULL, sizeof_struct_bloc + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             bloc_origine_huge = ret_ptr_huge;
             bloc_origine_huge->numero = 1;
-            bloc_origine_huge->adresse = ret_ptr_huge + sizeof(struct bloc);
+            bloc_origine_huge->adresse = ret_ptr_huge + sizeof_struct_bloc;
             bloc_origine_huge->addr_previous = NULL;
             bloc_origine_huge->addr_next = NULL;
-            bloc_origine_huge->taille = size + sizeof(struct bloc);
+            bloc_origine_huge->taille = size + sizeof_struct_bloc;
 
             next128 = bloc_origine_128->adresse;
             next256 = bloc_origine_256->adresse;
@@ -374,7 +383,7 @@ void* malloc(size_t size)
     // si on y arrive pas , mmap
     {   if(next64 == NULL)
             abort();
-        int count = j64_max;
+        unsigned int count = j64_max;
         if (size < 64 ) { // 65 nan ? on peut ecrire jusqu'a 64 octets, donc size < 65
             while (count >
                    0// il faut sauter d'adresse en adresse sans utiliser d'indice j , sinon on ne peut pas rajouter
@@ -383,9 +392,9 @@ void* malloc(size_t size)
                 // les addr next et addr previous poiur etre comme dans un anneau!
                     ) //probleeeeeeeme
             {
-                if (((struct bloc *) ((void *) next64 - sizeof(struct bloc)))->numero == 0) // est-ce libre ?
+                if (((struct bloc *) ((void *) next64 - sizeof_struct_bloc))->numero == 0) // est-ce libre ?
                 {
-                    ((struct bloc *) ((void *) next64 - sizeof(struct bloc)))->numero = 1; //maintenant ca l'est plus
+                    ((struct bloc *) ((void *) next64 - sizeof_struct_bloc))->numero = 1; //maintenant ca l'est plus
 
                     if (next64 == (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
@@ -398,51 +407,64 @@ void* malloc(size_t size)
                     nb_recyclage += 1;
 #endif
                     void *ret = next64;
-                    next64 = ((struct bloc *) ((void *) next64 - sizeof(struct bloc)))->addr_next;
+                    next64 = ((struct bloc *) ((void *) next64 - sizeof_struct_bloc))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
                     return ret;
                 }
                 count--;
-                next64 = ((struct bloc*)((void*)next64 - sizeof(struct bloc)))->addr_next;
+                next64 = ((struct bloc*)((void*)next64 - sizeof_struct_bloc))->addr_next;
             }
         }
-        //if(size < 64 + 1) on recrée de nouveaux bloc de 64 octets puis on lui en donne un avec un return;
 
+        //if(size < 64 + 1) on recrée de nouveaux bloc de 64 octets puis on lui en donne un avec un return;
         if(size < 64 )
         {
         int i = 0;
 #ifdef COUNTER
         nb_mmap += 1;
 #endif
+        t64 = 2 << 25;
         struct bloc* tmp_bloc = mmap(NULL, t64,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        while( t64 > sizeof(struct bloc) + 64 )// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
+
+        while( t64 > sizeof_struct_bloc + 64 )// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
             //non rien  ici !!
         {
-            ((struct bloc*)((void*)tmp_bloc + i * (64 + sizeof(struct bloc) )))->adresse        = ((void*)tmp_bloc + i * ( 64 + sizeof(struct bloc) )) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-            ((struct bloc*)((void*)tmp_bloc + i * ( 64 + sizeof(struct bloc) )))->addr_previous = (((struct bloc*)((void*)tmp_bloc + i * (64 +
-                    sizeof(struct bloc) )))->adresse == ( (void*)tmp_bloc + sizeof(struct bloc) )  ) ? bloc_origine_64->addr_previous : ((struct bloc*)((void*)tmp_bloc + i * (64 +
-                            sizeof(struct bloc)) ))->adresse - 64 - sizeof(struct bloc);  // on ne met plus de null, on est maintenant sur un anneau
-            ((struct bloc*)((void*)tmp_bloc + i * ( 64 + sizeof(struct bloc) )))->addr_next     = ((struct bloc*)((void*)tmp_bloc + i * (64 + sizeof(struct bloc) )))->adresse + sizeof(struct bloc) + 64;
-            ((struct bloc*)((void*)tmp_bloc + i * ( 64 + sizeof(struct bloc) )))->taille = 64 + sizeof(struct bloc);
-            ((struct bloc*)((void*)tmp_bloc + i * ( 64 + sizeof(struct bloc) )))->numero = 0;
+            ((struct bloc*)((void*)tmp_bloc + i * (sizeof_bloc_and_writable_space_64 )))->adresse        = ((void*)tmp_bloc + i * ( sizeof_bloc_and_writable_space_64 )) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+            ((struct bloc*)((void*)tmp_bloc + i * ( sizeof_bloc_and_writable_space_64 )))->addr_previous =  ((struct bloc*)((void*)tmp_bloc + i * (64 +
+                            sizeof_struct_bloc) ))->adresse - 64 - sizeof_struct_bloc;  // on ne met plus de null, on est maintenant sur un anneau
+            ((struct bloc*)((void*)tmp_bloc + i * ( sizeof_bloc_and_writable_space_64 )))->addr_next     = ((struct bloc*)((void*)tmp_bloc + i * (sizeof_bloc_and_writable_space_64 )))->adresse + sizeof_struct_bloc + 64;
+            ((struct bloc*)((void*)tmp_bloc + i * ( sizeof_bloc_and_writable_space_64 )))->taille = sizeof_bloc_and_writable_space_64;
+            ((struct bloc*)((void*)tmp_bloc + i * ( sizeof_bloc_and_writable_space_64 )))->numero = 0;
 
-            if(((struct bloc*)((void*)tmp_bloc + i * ( 64 + sizeof(struct bloc) )))->adresse  == (void*)NULL) //ok cest pas null
+            if(((struct bloc*)((void*)tmp_bloc + i * ( sizeof_bloc_and_writable_space_64 )))->adresse  == (void*)NULL) //ok cest pas null
                 exit(-1);
-            if(((struct bloc*)((void*)tmp_bloc + i * ( 64 + sizeof(struct bloc) )))->addr_next == (void*)NULL  )//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
+            if(((struct bloc*)((void*)tmp_bloc + i * ( sizeof_bloc_and_writable_space_64 )))->addr_next == (void*)NULL  )//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
                 exit(-1);
-            t64 -= (sizeof(struct bloc) + 64);
+            t64 -= (sizeof_struct_bloc + 64);
 
             ++i;
             ++j64_max;
         }
 
-        ((struct bloc*)((void*)tmp_bloc + (i - 1)* ( 64 + sizeof(struct bloc) )))->addr_next     = bloc_origine_64->adresse;
-        ((struct bloc*)(bloc_origine_64->addr_previous - sizeof(struct bloc)))->addr_next        = tmp_bloc->adresse;
-        bloc_origine_64->addr_previous = ((struct bloc*)((void*)tmp_bloc + (i - 1)* ( 64 + sizeof(struct bloc) )))->adresse;
+        tmp_bloc->addr_previous = bloc_origine_64->addr_previous; // ca marche ici
+        //le probleme est en dessous de cette phrase
+        //abort();
+        //la partie gauche du dessous provoque un segfault et des fois nan
+        ((struct bloc*)((void*)tmp_bloc + (i - 1) * ( sizeof_bloc_and_writable_space_64) ))->addr_next     = bloc_origine_64->adresse;//des fois segfault, des fois nan... comment on peut rentrer ici et faire un segfault,
+        // alors que juste au dessus tout allait bien et surtout qu'il n'y a pas eu de segfault avant dans le while()
+        //abort();
+
+        //le pbleme est au dessus putain ! je comprends pas !
+
+        ((struct bloc*)(bloc_origine_64->addr_previous - sizeof_struct_bloc) )->addr_next        = tmp_bloc->adresse;
+        bloc_origine_64->addr_previous = ((struct bloc*)((void*)tmp_bloc + (i - 1)* ( sizeof_bloc_and_writable_space_64 )))->adresse;
+
         next64 = tmp_bloc->addr_next;
         tmp_bloc->numero = 1;
-
+        //abort();
         pthread_mutex_unlock(&mutex_malloc);
+        //abort();
+        //exit(-1);
         return (tmp_bloc->adresse);
         // #on mmap des nouveaux blocs;
         // #on les remplis avec un while comme au dessus
@@ -461,9 +483,9 @@ void* malloc(size_t size)
                 // les addr next et addr previous poiur etre comme dans un anneau!
                     ) //probleeeeeeeme
             {
-                if (((struct bloc *) ((void *) next128 - sizeof(struct bloc)))->numero == 0) // est-ce libre ?
+                if (((struct bloc *) ((void *) next128 - sizeof_struct_bloc))->numero == 0) // est-ce libre ?
                 {
-                    ((struct bloc *) ((void *) next128 - sizeof(struct bloc)))->numero = 1; //maintenant ca l'est plus
+                    ((struct bloc *) ((void *) next128 - sizeof_struct_bloc))->numero = 1; //maintenant ca l'est plus
 
                     if (next128 ==
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
@@ -477,12 +499,12 @@ void* malloc(size_t size)
                     nb_recyclage += 1;
 #endif
                     void *ret = next128;
-                    next128 = ((struct bloc *) ((void *)next128 - sizeof(struct bloc)))->addr_next;
+                    next128 = ((struct bloc *) ((void *)next128 - sizeof_struct_bloc))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
                     return ret;
                 }
                 count--;
-                next128 = ((struct bloc*)((void*)next128 - sizeof(struct bloc)))->addr_next;
+                next128 = ((struct bloc*)((void*)next128 - sizeof_struct_bloc))->addr_next;
 
             }
         }
@@ -495,30 +517,31 @@ void* malloc(size_t size)
 #ifdef COUNTER
             nb_mmap += 1;
 #endif
+            t128 = 2 << 25;
             struct bloc *tmp_bloc = mmap(NULL, t128,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            while (t128 > sizeof(struct bloc) + 128)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
+            while (t128 > sizeof_struct_bloc + 128)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
             {
-                ((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->adresse = ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-                ((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->addr_previous = (((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->adresse == (void*)tmp_bloc + sizeof(struct bloc))
-                        ? bloc_origine_128->addr_previous : ((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->adresse - 128 - sizeof(struct bloc);  // on ne met plus de null, on est maintenant sur un anneau
-                ((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->adresse + sizeof(struct bloc) + 128;
-                ((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->taille = 128 + sizeof(struct bloc);
-                ((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->numero = 0;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->adresse = ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->addr_previous =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->adresse - 128 - sizeof_struct_bloc;  // on ne met plus de null, on est maintenant sur un anneau
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->adresse + sizeof_struct_bloc + 128;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->taille = sizeof_bloc_and_writable_space_128;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->numero = 0;
 
-                if (((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->adresse == (void *) NULL) //ok cest pas null
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->adresse == (void *) NULL) //ok cest pas null
                     exit(-1);
-                if (((struct bloc *) ((void *) tmp_bloc + i * (128 + sizeof(struct bloc))))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_128)))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
                     exit(-1);
-                t128 -= (sizeof(struct bloc) + 128);
+                t128 -= (sizeof_struct_bloc + 128);
 
                 ++i;
                 ++j128_max;
             }
 
-            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (128 + sizeof(struct bloc))))->addr_next = bloc_origine_128->adresse;
-            ((struct bloc *) (bloc_origine_128->addr_previous - sizeof(struct bloc)))->addr_next = tmp_bloc->adresse;
-            bloc_origine_128->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (128 + sizeof(struct bloc))))->adresse;
+            tmp_bloc->addr_previous = bloc_origine_128->addr_previous;
+            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_128)))->addr_next = bloc_origine_128->adresse;
+            ((struct bloc *) (bloc_origine_128->addr_previous - sizeof_struct_bloc))->addr_next = tmp_bloc->adresse;
+            bloc_origine_128->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_128)))->adresse;
             next128 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
 
@@ -536,9 +559,9 @@ void* malloc(size_t size)
                 // les addr next et addr previous poiur etre comme dans un anneau!
                     ) //probleeeeeeeme
             {
-                if (((struct bloc *) ((void *) next256 - sizeof(struct bloc)))->numero == 0) // est-ce libre ?
+                if (((struct bloc *) ((void *) next256 - sizeof_struct_bloc))->numero == 0) // est-ce libre ?
                 {
-                    ((struct bloc *) ((void *) next256 - sizeof(struct bloc)))->numero = 1; //maintenant ca l'est plus
+                    ((struct bloc *) ((void *) next256 - sizeof_struct_bloc))->numero = 1; //maintenant ca l'est plus
 
                     if (next256 ==
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
@@ -552,12 +575,12 @@ void* malloc(size_t size)
                     nb_recyclage += 1;
 #endif
                     void *ret = next256;
-                    next256 = ((struct bloc *) ((void *) next256 - sizeof(struct bloc)))->addr_next;
+                    next256 = ((struct bloc *) ((void *) next256 - sizeof_struct_bloc))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
                     return ret;
                 }
                 count--;
-                next256 = ((struct bloc*)((void*)next256 - sizeof(struct bloc)))->addr_next;
+                next256 = ((struct bloc*)((void*)next256 - sizeof_struct_bloc))->addr_next;
 
             }
         }
@@ -572,30 +595,31 @@ void* malloc(size_t size)
 #ifdef COUNTER
             nb_mmap += 1;
 #endif
+            t256 = 2 << 25;
             struct bloc *tmp_bloc = mmap(NULL, t256,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            while (t256 > sizeof(struct bloc) + 256)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
+            while (t256 > sizeof_struct_bloc + 256)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
             {
-                ((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->adresse = ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-                ((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->addr_previous = (((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->adresse == (void*)tmp_bloc + sizeof(struct bloc))
-                        ? bloc_origine_256->addr_previous : ((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->adresse - 256 - sizeof(struct bloc);  // on ne met plus de null, on est maintenant sur un anneau
-                ((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->adresse + sizeof(struct bloc) + 256;
-                ((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->taille = 256 + sizeof(struct bloc);
-                ((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->numero = 0;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->adresse = ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->addr_previous =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->adresse - 256 - sizeof_struct_bloc;  // on ne met plus de null, on est maintenant sur un anneau
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->adresse + sizeof_struct_bloc + 256;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->taille = sizeof_bloc_and_writable_space_256;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->numero = 0;
 
-                if (((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->adresse == (void *) NULL) //ok cest pas null
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->adresse == (void *) NULL) //ok cest pas null
                     exit(-1);
-                if (((struct bloc *) ((void *) tmp_bloc + i * (256 + sizeof(struct bloc))))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_256)))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
                     exit(-1);
-                t256 -= (sizeof(struct bloc) + 256);
+                t256 -= (sizeof_struct_bloc + 256);
 
                 ++i;
                 ++j256_max;
             }
 
-            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (256 + sizeof(struct bloc))))->addr_next = bloc_origine_256->adresse;
-            ((struct bloc *) (bloc_origine_256->addr_previous - sizeof(struct bloc)))->addr_next = tmp_bloc->adresse;
-            bloc_origine_256->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (256 + sizeof(struct bloc))))->adresse;
+            tmp_bloc->addr_previous = bloc_origine_256->addr_previous;
+            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_256)))->addr_next = bloc_origine_256->adresse;
+            ((struct bloc *) (bloc_origine_256->addr_previous - sizeof_struct_bloc))->addr_next = tmp_bloc->adresse;
+            bloc_origine_256->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_256)))->adresse;
             next256 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
             pthread_mutex_unlock(&mutex_malloc);
@@ -614,9 +638,9 @@ void* malloc(size_t size)
                 // les addr next et addr previous poiur etre comme dans un anneau!
                     ) //probleeeeeeeme
             {
-                if (((struct bloc *) ((void *) next512 - sizeof(struct bloc)))->numero == 0) // est-ce libre ?
+                if (((struct bloc *) ((void *) next512 - sizeof_struct_bloc))->numero == 0) // est-ce libre ?
                 {
-                    ((struct bloc *) ((void *) next512 - sizeof(struct bloc)))->numero = 1; //maintenant ca l'est plus
+                    ((struct bloc *) ((void *) next512 - sizeof_struct_bloc))->numero = 1; //maintenant ca l'est plus
 
                     if (next512 ==
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
@@ -630,12 +654,12 @@ void* malloc(size_t size)
                     nb_recyclage += 1;
 #endif
                     void *ret = next512;
-                    next512 = ((struct bloc *) ((void *) next512 - sizeof(struct bloc)))->addr_next;
+                    next512 = ((struct bloc *) ((void *) next512 - sizeof_struct_bloc))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
                     return ret;
                 }
                 count--;
-                next512 = ((struct bloc*)((void*)next512 - sizeof(struct bloc)))->addr_next;
+                next512 = ((struct bloc*)((void*)next512 - sizeof_struct_bloc))->addr_next;
 
             }
         }
@@ -647,30 +671,32 @@ void* malloc(size_t size)
 #ifdef COUNTER
             nb_mmap += 1;
 #endif
+            t512 = 2 << 25;
             struct bloc *tmp_bloc = mmap(NULL, t512, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            while (t512 > sizeof(struct bloc) + 512)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
+            while (t512 > sizeof_struct_bloc + 512)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
             {
-                ((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->adresse = ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-                ((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->addr_previous = (((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->adresse == (void*)tmp_bloc + sizeof(struct bloc))
-                        ? bloc_origine_512->addr_previous : ((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->adresse - 512 - sizeof(struct bloc);  // on ne met plus de null, on est maintenant sur un anneau
-                ((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->adresse + sizeof(struct bloc) + 512;
-                ((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->taille = 512 + sizeof(struct bloc);
-                ((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->numero = 0;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->adresse = ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)) + sizeof_struct_bloc;//adresse decallé de la taille des metadonnees
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->addr_previous =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->adresse - 512 - sizeof_struct_bloc;  // on ne met plus de null, on est maintenant sur un anneau
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->adresse + sizeof_struct_bloc + 512;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->taille = sizeof_bloc_and_writable_space_512;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->numero = 0;
 
-                if (((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->adresse == (void *) NULL) //ok cest pas null
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->adresse == (void *) NULL) //ok cest pas null
                     exit(-1);
-                if (((struct bloc *) ((void *) tmp_bloc + i * (512 + sizeof(struct bloc))))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_512)))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
                     exit(-1);
-                t512 -= (sizeof(struct bloc) + 512);
+                t512 -= (sizeof_struct_bloc + 512);
 
                 ++i;
                 ++j512_max;
             }
 
-            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (512 + sizeof(struct bloc))))->addr_next = bloc_origine_512->adresse;
-            ((struct bloc *) (bloc_origine_512->addr_previous - sizeof(struct bloc)))->addr_next = tmp_bloc->adresse;
-            bloc_origine_512->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (512 + sizeof(struct bloc))))->adresse;
+
+            tmp_bloc->addr_previous = bloc_origine_512->addr_previous;
+            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_512)))->addr_next = bloc_origine_512->adresse;
+            ((struct bloc *) (bloc_origine_512->addr_previous - sizeof_struct_bloc))->addr_next = tmp_bloc->adresse;
+            bloc_origine_512->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_512)))->adresse;
             next512 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
 
@@ -689,9 +715,9 @@ void* malloc(size_t size)
                 // les addr next et addr previous poiur etre comme dans un anneau!
                     ) //probleeeeeeeme
             {
-                if (((struct bloc *) ((void *) next1024 - sizeof(struct bloc)))->numero == 0) // est-ce libre ?
+                if (((struct bloc *) ((void *) next1024 - sizeof_struct_bloc))->numero == 0) // est-ce libre ?
                 {
-                    ((struct bloc *) ((void *) next1024 - sizeof(struct bloc)))->numero = 1; //maintenant ca l'est plus
+                    ((struct bloc *) ((void *) next1024 - sizeof_struct_bloc))->numero = 1; //maintenant ca l'est plus
                     if (next1024 ==
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
@@ -704,12 +730,12 @@ void* malloc(size_t size)
                     nb_recyclage += 1;
 #endif
                     void *ret = next1024;
-                    next1024 = ((struct bloc *) ((void *) next1024 - sizeof(struct bloc)))->addr_next;
+                    next1024 = ((struct bloc *) ((void *) next1024 - sizeof_struct_bloc))->addr_next;
                     pthread_mutex_unlock(&mutex_malloc);
                     return ret;
                 }
                 count--;
-                next1024 = ((struct bloc*)((void*)next1024 - sizeof(struct bloc)))->addr_next;
+                next1024 = ((struct bloc*)((void*)next1024 - sizeof_struct_bloc))->addr_next;
 
             }
         }
@@ -721,30 +747,32 @@ void* malloc(size_t size)
 #ifdef COUNTER
             nb_mmap += 1;
 #endif
+            t1024 = 2 << 25;
             struct bloc *tmp_bloc = mmap(NULL, t1024,  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            while (t1024 > sizeof(struct bloc) + 1024)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
+            while (t1024 > sizeof_struct_bloc + 1024)// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
                 //non rien  ici !!
             {
-                ((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->adresse = ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))) + sizeof(struct bloc);//adresse decallé de la taille des metadonnees
-                ((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->addr_previous = (((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->adresse == (void*)tmp_bloc + sizeof(struct bloc))
-                        ? bloc_origine_1024->addr_previous : ((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->adresse - 1024 - sizeof(struct bloc);  // on ne met plus de null, on est maintenant sur un anneau
-                ((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->adresse + sizeof(struct bloc) + 1024;
-                ((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->taille = 1024 + sizeof(struct bloc);
-                ((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->numero = 0;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->adresse = ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024) + sizeof_struct_bloc);//adresse decallé de la taille des metadonnees
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->addr_previous =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->adresse - 1024 - sizeof_struct_bloc;  // on ne met plus de null, on est maintenant sur un anneau
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->addr_next =  ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->adresse + sizeof_struct_bloc + 1024;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->taille =sizeof_bloc_and_writable_space_1024;
+                ((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->numero = 0;
 
-                if (((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->adresse == (void *) NULL) //ok cest pas null
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->adresse == (void *) NULL) //ok cest pas null
                     exit(-1);
-                if (((struct bloc *) ((void *) tmp_bloc + i * (1024 + sizeof(struct bloc))))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
+                if (((struct bloc *) ((void *) tmp_bloc + i * (sizeof_bloc_and_writable_space_1024)))->addr_next ==  (void *) NULL)//ok cest pas null, donc pourquoi ca le devient pendant le recyclage de bloc
                     exit(-1);
-                t1024 -= (sizeof(struct bloc) + 1024);
+                t1024 -= (sizeof_struct_bloc + 1024);
 
                 ++i;
                 ++j1024_max;
             }
+            //abort();
 
-            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (1024 + sizeof(struct bloc))))->addr_next = bloc_origine_1024->adresse;
-            ((struct bloc *) (bloc_origine_1024->addr_previous - sizeof(struct bloc)))->addr_next = tmp_bloc->adresse;
-            bloc_origine_1024->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (1024 + sizeof(struct bloc))))->adresse;
+            tmp_bloc->addr_previous = bloc_origine_1024->addr_previous;
+            ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_1024)))->addr_next = bloc_origine_1024->adresse;
+            ((struct bloc *) (bloc_origine_1024->addr_previous - sizeof_struct_bloc))->addr_next = tmp_bloc->adresse;
+            bloc_origine_1024->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_1024)))->adresse;
             next1024 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
 
@@ -760,11 +788,11 @@ void* malloc(size_t size)
 #ifdef COUNTER
             nb_mmap += 1;
 #endif
-            ret_ptr_huge = mmap(NULL, sizeof(struct bloc) + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            ret_ptr_huge = mmap(NULL, sizeof_struct_bloc + size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             bloc_origine_huge = ret_ptr_huge;
-            bloc_origine_huge->taille = size + sizeof(struct bloc);
+            bloc_origine_huge->taille = size + sizeof_struct_bloc;
             bloc_origine_huge->numero=1;
-            bloc_origine_huge->adresse = (void*)bloc_origine_huge + sizeof(struct bloc);
+            bloc_origine_huge->adresse = (void*)bloc_origine_huge + sizeof_struct_bloc;
             bloc_origine_huge->addr_previous=NULL;
             bloc_origine_huge->addr_next=NULL;
             //perror("huge ! \n");
@@ -786,11 +814,13 @@ void* malloc(size_t size)
 
 static pthread_mutex_t mutex_free = PTHREAD_MUTEX_INITIALIZER;
 
-void free(void* ptr)
+void free(void* ptr)//que se passe t il si quelqu'un utilise beaucoup de bloc de taille < 1024 puis plus rien ? On aurait de la memoire mappé, inutilisé et inutilisable par d'autres processus
 {
     //printf("indice : %d\n",indice);
     //printf("addr de bloc origine 64 : %p\n",bloc_origine_64);
     //printf("entree dans free :");
+    //printf("%u %u %u %u %u\n",j64_max,j128_max,j256_max,j512_max,j1024_max);
+    //printf("malloc %llu\n",nb_malloc);
     pthread_mutex_lock(&mutex_free);
 #ifdef COUNTER
     nb_free += 1;
@@ -802,18 +832,18 @@ void free(void* ptr)
         pthread_mutex_unlock(&mutex_free);
         return (void)0;
     }
-    struct bloc* tmp_bloc = (void*)ptr - sizeof(struct bloc); //des fois, ça crée une segfault SIGSEGV
+    struct bloc* tmp_bloc = (void*)ptr - sizeof_struct_bloc; //des fois, ça crée une segfault SIGSEGV
     tmp_bloc->numero=0;
     //printf("j64_max :  %u    j128_max :  %u  j256_max : %u  j512_max : %u   j1024_max : %u\n",j64_max,j128_max,j256_max,j512_max,j1024_max);
     //printf("taille : %d",tmp_bloc->taille);0
     //printf("taille + 40 = %u\n",tmp_bloc->taille);
-    if(tmp_bloc->taille > (1024 + sizeof(struct bloc)) )
+    if(tmp_bloc->taille > (sizeof_bloc_and_writable_space_1024 ))
     {
         //printf("avant munmap\n");
 #ifdef COUNTER
         nb_munmap += 1;
 #endif
-        munmap(tmp_bloc, tmp_bloc->taille);
+        munmap(tmp_bloc, tmp_bloc->taille); //on munmap ou on recyle i.e on agrandi les listes chainees deja existantes ?  Dans tout les cas, inutile de faire une liste de hugeblock
         pthread_mutex_unlock(&mutex_free);
         return (void)0;
         //printf("apres munmap\n");
@@ -871,7 +901,8 @@ void* realloc(void* ptr, size_t size)
         return (void*)0;
     }
     void* ret = malloc(size);
-    int min = MIN( size, ((struct bloc*)((void*)ptr - sizeof(struct bloc)))->taille - sizeof(struct bloc)  );  // gerer le cas ou l'user met une size trop grande auquel cas il ne faut pas faire de segfaul// t
+
+    int min = MIN( size, ((struct bloc*)((void*)ptr - sizeof_struct_bloc))->taille - sizeof_struct_bloc  );  // gerer le cas ou l'user met une size trop grande auquel cas il ne faut pas faire de segfaul// t
     // en fait c'est plutot le minimum qu'il faut !
     //printf("max = %d\n",max);
     //si on realloc une taille plus petite, inutile de changer de zone memoire et de recopier, on change juste la metadonnee
