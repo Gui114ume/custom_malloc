@@ -95,6 +95,13 @@ static unsigned int j512_max = 0;
 static unsigned int j1024_max = 0;
 
 static pthread_mutex_t mutex_malloc = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_malloc_64 = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_malloc_128 = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_malloc_256 = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_malloc_512 = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_malloc_1024 = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_malloc_huge = PTHREAD_MUTEX_INITIALIZER;
+
 
 void* malloc(size_t size)
 {
@@ -381,11 +388,15 @@ void* malloc(size_t size)
     }
     else // on ecrit un algo qui cherche une place pour satisfaire la demande et met à jour les adresses previous et next, puis
     // si on y arrive pas , mmap
-    {   if(next64 == NULL)
-            abort();
-        unsigned int count = j64_max;
+    {
+        pthread_mutex_unlock(&mutex_malloc);
+
+
         if (size < 64 ) { // 65 nan ? on peut ecrire jusqu'a 64 octets, donc size < 65
-            while (count >
+            pthread_mutex_lock(&mutex_malloc_64);
+            unsigned int count_64 = j64_max;
+
+            while (count_64 >
                    0// il faut sauter d'adresse en adresse sans utiliser d'indice j , sinon on ne peut pas rajouter
                 //de bloc. Il faudra donc un compteur permettant d'indiquer si on a fait un tour complet des adresses ( le next du dernier pointera vers le premier, il faut stocker le nb de bloc dans une
                 // variable, on peut garder j64_max et le calculer de la meme manière que maintenant dans mem2.c) si on a fini un tour sans trouver de bloc libre, on en alloue d'autre et on rempli comme il faut
@@ -399,7 +410,7 @@ void* malloc(size_t size)
                     if (next64 == (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
                         //printf("64 = NULL, j = %u,abort()\n",j);// GRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
-                        pthread_mutex_unlock(&mutex_malloc);
+                        pthread_mutex_unlock(&mutex_malloc_64);
                         //perror("ici\n");
                         abort();
                     }
@@ -408,10 +419,10 @@ void* malloc(size_t size)
 #endif
                     void *ret = next64;
                     next64 = ((struct bloc *) ((void *) next64 - sizeof_struct_bloc))->addr_next;
-                    pthread_mutex_unlock(&mutex_malloc);
+                    pthread_mutex_unlock(&mutex_malloc_64);
                     return ret;
                 }
-                count--;
+                count_64--;
                 next64 = ((struct bloc*)((void*)next64 - sizeof_struct_bloc))->addr_next;
             }
         }
@@ -462,7 +473,7 @@ void* malloc(size_t size)
         next64 = tmp_bloc->addr_next;
         tmp_bloc->numero = 1;
         //abort();
-        pthread_mutex_unlock(&mutex_malloc);
+        pthread_mutex_unlock(&mutex_malloc_64);
         //abort();
         //exit(-1);
         return (tmp_bloc->adresse);
@@ -473,10 +484,12 @@ void* malloc(size_t size)
 
         }
 
-        count = j128_max;
+
 
         if (size < 128 ) { // 65 nan ? on peut ecrire jusqu'a 64 octets, donc size < 65
-            while (count >
+            pthread_mutex_lock(&mutex_malloc_128);
+            unsigned int count_128 = j128_max;
+            while (count_128 >
                    0// il faut sauter d'adresse en adresse sans utiliser d'indice j , sinon on ne peut pas rajouter
                 //de bloc. Il faudra donc un compteur permettant d'indiquer si on a fait un tour complet des adresses ( le next du dernier pointera vers le premier, il faut stocker le nb de bloc dans une
                 // variable, on peut garder j64_max et le calculer de la meme manière que maintenant dans mem2.c) si on a fini un tour sans trouver de bloc libre, on en alloue d'autre et on rempli comme il faut
@@ -491,7 +504,7 @@ void* malloc(size_t size)
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
                         //printf("64 = NULL, j = %u,abort()\n",j);// GRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
-                        pthread_mutex_unlock(&mutex_malloc);
+                        pthread_mutex_unlock(&mutex_malloc_128);
                         //perror("ici\n");
                         abort();
                     }
@@ -500,10 +513,10 @@ void* malloc(size_t size)
 #endif
                     void *ret = next128;
                     next128 = ((struct bloc *) ((void *)next128 - sizeof_struct_bloc))->addr_next;
-                    pthread_mutex_unlock(&mutex_malloc);
+                    pthread_mutex_unlock(&mutex_malloc_128);
                     return ret;
                 }
-                count--;
+                count_128--;
                 next128 = ((struct bloc*)((void*)next128 - sizeof_struct_bloc))->addr_next;
 
             }
@@ -545,14 +558,15 @@ void* malloc(size_t size)
             next128 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
 
-            pthread_mutex_unlock(&mutex_malloc);
+            pthread_mutex_unlock(&mutex_malloc_128);
             return (tmp_bloc->adresse);
         }
 
-        count = j256_max;
 
         if (size < 256 ) { // 65 nan ? on peut ecrire jusqu'a 64 octets, donc size < 65
-            while (count >
+            pthread_mutex_lock(&mutex_malloc_256);
+            unsigned int count_256 = j256_max;
+            while (count_256 >
                    0// il faut sauter d'adresse en adresse sans utiliser d'indice j , sinon on ne peut pas rajouter
                 //de bloc. Il faudra donc un compteur permettant d'indiquer si on a fait un tour complet des adresses ( le next du dernier pointera vers le premier, il faut stocker le nb de bloc dans une
                 // variable, on peut garder j64_max et le calculer de la meme manière que maintenant dans mem2.c) si on a fini un tour sans trouver de bloc libre, on en alloue d'autre et on rempli comme il faut
@@ -567,7 +581,7 @@ void* malloc(size_t size)
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
                         //printf("64 = NULL, j = %u,abort()\n",j);// GRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
-                        pthread_mutex_unlock(&mutex_malloc);
+                        pthread_mutex_unlock(&mutex_malloc_256);
                         //perror("ici\n");
                         abort();
                     }
@@ -576,10 +590,10 @@ void* malloc(size_t size)
 #endif
                     void *ret = next256;
                     next256 = ((struct bloc *) ((void *) next256 - sizeof_struct_bloc))->addr_next;
-                    pthread_mutex_unlock(&mutex_malloc);
+                    pthread_mutex_unlock(&mutex_malloc_256);
                     return ret;
                 }
-                count--;
+                count_256--;
                 next256 = ((struct bloc*)((void*)next256 - sizeof_struct_bloc))->addr_next;
 
             }
@@ -622,16 +636,18 @@ void* malloc(size_t size)
             bloc_origine_256->addr_previous = ((struct bloc *) ((void *) tmp_bloc + (i - 1) * (sizeof_bloc_and_writable_space_256)))->adresse;
             next256 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
-            pthread_mutex_unlock(&mutex_malloc);
+            pthread_mutex_unlock(&mutex_malloc_256);
             return (tmp_bloc->adresse);
         }
 
 
 
-        count = j512_max;
 
         if (size < 512 ) { // 65 nan ? on peut ecrire jusqu'a 64 octets, donc size < 65
-            while (count >
+            pthread_mutex_lock(&mutex_malloc_512);
+            unsigned int count_512 = j512_max;
+
+            while (count_512 >
                    0// il faut sauter d'adresse en adresse sans utiliser d'indice j , sinon on ne peut pas rajouter
                 //de bloc. Il faudra donc un compteur permettant d'indiquer si on a fait un tour complet des adresses ( le next du dernier pointera vers le premier, il faut stocker le nb de bloc dans une
                 // variable, on peut garder j64_max et le calculer de la meme manière que maintenant dans mem2.c) si on a fini un tour sans trouver de bloc libre, on en alloue d'autre et on rempli comme il faut
@@ -646,7 +662,7 @@ void* malloc(size_t size)
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
                         //printf("64 = NULL, j = %u,abort()\n",j);// GRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
-                        pthread_mutex_unlock(&mutex_malloc);
+                        pthread_mutex_unlock(&mutex_malloc_512);
                         //perror("ici\n");
                         abort();
                     }
@@ -655,10 +671,10 @@ void* malloc(size_t size)
 #endif
                     void *ret = next512;
                     next512 = ((struct bloc *) ((void *) next512 - sizeof_struct_bloc))->addr_next;
-                    pthread_mutex_unlock(&mutex_malloc);
+                    pthread_mutex_unlock(&mutex_malloc_512);
                     return ret;
                 }
-                count--;
+                count_512--;
                 next512 = ((struct bloc*)((void*)next512 - sizeof_struct_bloc))->addr_next;
 
             }
@@ -700,16 +716,18 @@ void* malloc(size_t size)
             next512 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
 
-            pthread_mutex_unlock(&mutex_malloc);
+            pthread_mutex_unlock(&mutex_malloc_512);
             return (tmp_bloc->adresse);
         }
 
 
-        count = j1024_max;
 
         if (size < 1024 )
         {
-            while (count > 0// il faut sauter d'adresse en adresse sans utiliser d'indice j , sinon on ne peut pas rajouter
+            pthread_mutex_lock(&mutex_malloc_1024);
+            unsigned int count_1024 = j1024_max;
+
+            while (count_1024 > 0// il faut sauter d'adresse en adresse sans utiliser d'indice j , sinon on ne peut pas rajouter
                 //de bloc. Il faudra donc un compteur permettant d'indiquer si on a fait un tour complet des adresses ( le next du dernier pointera vers le premier, il faut stocker le nb de bloc dans une
                 // variable, on peut garder j64_max et le calculer de la meme manière que maintenant dans mem2.c) si on a fini un tour sans trouver de bloc libre, on en alloue d'autre et on rempli comme il faut
                 // les addr next et addr previous poiur etre comme dans un anneau!
@@ -722,7 +740,7 @@ void* malloc(size_t size)
                         (void *) NULL)// c'est pas normal d'arriver la alors que addr_next dit que t'es pas NULL juste au dessus!!!!! resoudre ca !
                     {
                         //printf("64 = NULL, j = %u,abort()\n",j);// GRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
-                        pthread_mutex_unlock(&mutex_malloc);
+                        pthread_mutex_unlock(&mutex_malloc_1024);
                         //perror("ici\n");
                         abort();
                     }
@@ -731,10 +749,10 @@ void* malloc(size_t size)
 #endif
                     void *ret = next1024;
                     next1024 = ((struct bloc *) ((void *) next1024 - sizeof_struct_bloc))->addr_next;
-                    pthread_mutex_unlock(&mutex_malloc);
+                    pthread_mutex_unlock(&mutex_malloc_1024);
                     return ret;
                 }
-                count--;
+                count_1024--;
                 next1024 = ((struct bloc*)((void*)next1024 - sizeof_struct_bloc))->addr_next;
 
             }
@@ -776,7 +794,7 @@ void* malloc(size_t size)
             next1024 = tmp_bloc->addr_next;
             tmp_bloc->numero = 1;
 
-            pthread_mutex_unlock(&mutex_malloc);
+            pthread_mutex_unlock(&mutex_malloc_1024);
             return (tmp_bloc->adresse);
         }
 
@@ -785,6 +803,7 @@ void* malloc(size_t size)
         else // si on est la c'est qu'il n'y a plus aucun bloc disponible, on pourrait faire un nouveau gros mmap() (si size est < 1024 sinon mmpa)
         // et rajouter des blocs dans les bloc_origines_xxxx, e, prenant garde a ne pas depasser les capacites de la machine
         {
+            pthread_mutex_lock(&mutex_malloc_huge);
 #ifdef COUNTER
             nb_mmap += 1;
 #endif
@@ -800,12 +819,11 @@ void* malloc(size_t size)
             {
                 //printf("huge = NULL, abort()\n");
                 //perror("ici\n");
-
+                pthread_mutex_unlock(&mutex_malloc_huge);
                 abort();
                 //exit(-1);
             }
-            pthread_mutex_unlock(&mutex_malloc);
-
+            pthread_mutex_unlock(&mutex_malloc_huge);
             return bloc_origine_huge->adresse;
         }
     }
