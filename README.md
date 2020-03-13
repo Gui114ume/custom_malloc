@@ -90,6 +90,10 @@ Dans le cas où l'utilisateur demanderait plus de 1024 bytes, on lui alloue une 
 Complexité des algorithmes
 --------------------------
 
+* Algorithme servant à la recherche d'un bloc libre à allouer
+* Algorithme servant à remplir une zone nouvellement mappée
+
+
 Comparaison des performances
 ----------------------------
 
@@ -104,7 +108,6 @@ Ce qui n'a pas encore été implémenté
 * Le recyclage des zones mémoires réservé par l'utilisateur lors d'un appel à malloc( size > 1024 )
 
 
-Sources
-=======
-
+Les points faibles de cet allocateur
+====================================
 
