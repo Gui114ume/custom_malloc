@@ -91,23 +91,51 @@ Complexité des algorithmes
 --------------------------
 
 * Algorithme servant à la recherche d'un bloc libre à allouer
+
+
+-> Pire des cas
+
+
+
+
+-> Meilleur des cas
+
+
+
 * Algorithme servant à remplir une zone nouvellement mappée
+
+
+-> Pire des cas
+
+
+
+-> Meilleur des cas
+
 
 
 Comparaison des performances
 ----------------------------
 
-Les programmes de benchmark sont disponible sur le github dont le lien est situé en haut de page.
+Les 2 programmes de benchmark sont disponible sur le github dont le lien est situé en haut de page.
+
+L'un d'eux consiste en une boucle de malloc( sizeof( int )); free(); Nous testons ici la performance lors d'allocation et la désallocation de petite zone mémoire, en l'occurence 8 octets.
+
+L'autre utilise à chaque tour de boucle, la fonction malloc, puis free, puis calloc, puis realloc, puis free. Les tailles demancés à chaque allocation sont calculés à l'aide de la fonction rand()%2048. Nous testons ici les performances de la librairie dans le "cas moyen".
+
+Les graphes de performances représentent le temps mis pour exécuter un programme en fonction du nombre de tour de boucle effectué. Chaque ensemble de points de même couleur correspond à des résultats obtenues en utilisant le même allocateur. Nous utiliserons les allocateurs suivant :
+
+* malloc
+* _mm_malloc
+* custom_malloc
+
+Graphes: Fournis dans le repo github, le lien est en haut de page.
 
 
-Ce qui n'a pas encore été implémenté
-------------------------------------
-
-* L'alignement mémoire sur 64 octets
-* La libération de zones mémoires mmapé mais pas utilisé par le processus concerné
-* Le recyclage des zones mémoires réservé par l'utilisateur lors d'un appel à malloc( size > 1024 )
 
 
 Les points faibles de cet allocateur
 ====================================
 
+* L'alignement mémoire n'est pas assuré.
+* La libération de zones mémoires mmapé mais pas utilisées par le processus concerné n'est pas implémenté.
+* Les zones mémoires réservé par l'utilisateur lors d'un appel à malloc( size > 1024) sont libérées directement sans aucun "recyclage".
