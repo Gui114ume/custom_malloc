@@ -53,7 +53,8 @@ Elle dispose également d'une fonction get_stat(), permettant de connaitre les i
 * nombre de mmap() utilisé
 * nombre de munmap() utilisé
 
-Elle est rendu thread-safe par l'utilsation de mutex. Les fonctions cité précédemment lockent un mutex_"nom_de_focntion" dès l'entrée dans la fonction, puis le relâche avant de return.
+Elle est rendu thread-safe par l'utilsation de mutex. Les fonctions cité précédemment lockent un mutex_"nom_de_fonction" dès l'entrée dans la fonction, puis le relâche avant de return.
+Malloc permet de faire des allocations en parallèle (multithread) à condition que le taille du bloc renvoyé par malloc à chaque thread ne soit pas la même. Des blocs de tailles différentes sont gérés par des variables partagés différentes. Il n'y a donc aucun risque d'accès concurrent le cas échéant.
 
 Ces fonctions peuvent être utilisés en remplacement des fonctions de la librairie standard, soit en compilant son programme contre la librairie, soit en faisant une interposition de symbole grâce au chargement dynamique de librairie ( LD_PRELOAD ).
 
