@@ -93,26 +93,32 @@ Complexité des algorithmes
 
 * Algorithme servant à la recherche d'un bloc libre à allouer
 
+	var next_addr
+	for i = 1:nb_de_bloc // on boucle comme sur un anneau
+		if next_addr = 0 //libre
+			next_addr += 1		
+			return addr
 
 -> Pire des cas
 
-
+Le pire des cas se produit lorsque l'on parcours tout les blocs libres, avant de se rendre compte qu'aucun n'est disponible. Là démarre une création de nouveaux bloc. La complexité est donc égale au nombre de bloc créé depuis le début, elle est égale à n. (linéaire)
 
 
 -> Meilleur des cas
 
+Le meilleur des cas se produit lorsque dès la première itération, la fonction a trouvé un bloc à retourner à l'utilisateur. La complexité est en 1. (constant)
 
 
 * Algorithme servant à remplir une zone nouvellement mappée
 
-
--> Pire des cas
-
-
-
--> Meilleur des cas
-
-
+	for i=1:n
+		adresse       = xxx
+		addr_next     = xxx
+		addr_previous = xxx
+		taille        = xxx
+		numero        = xxx
+		
+L'algorithme est linéaire, sa complexité en temps est en n, si l'on considère que chaque affectation prend un temps 1 à s'effectuer. Il n'y a pas de meilleure des cas ni de pire des cas. Il n'y a qu'un cas possible. Il faut noter que n est le nombre de bloc à créer.
 
 Comparaison des performances
 ----------------------------

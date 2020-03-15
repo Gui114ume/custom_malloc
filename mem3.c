@@ -33,6 +33,10 @@
 
 #define MIN(a , b) ( ( (a) < (b) ) ? (a) : (b) )
 
+
+//une fois que des zones ont ete mmapé mais ne servent plus a rien, comment les virer pour qu'un autre processus puisse disposer de la memoire ??
+
+
 struct bloc // taille 40 octets
 {
     void* adresse;
@@ -160,7 +164,7 @@ void* malloc(size_t size)
         bloc_origine_huge = ret_ptr_huge;//initialiser le premier pour mettre des NULL partout, on pourra ainsi
         // faire un recyclage par une boucle while en cas d'appel a malloc pour une huge size
 
-        int i = 0;
+        int i = 0; //
         while( t64 > sizeof_struct_bloc + 64 )// il y a forcement un probleme de remplissage, comment peut il y avoir des adresse = NULL alors que l'algo est celui ci-dessous ?
             //non rien  ici !!
         {
@@ -862,6 +866,7 @@ void free(void* ptr)//que se passe t il si quelqu'un utilise beaucoup de bloc de
         nb_munmap += 1;
 #endif
         munmap(tmp_bloc, tmp_bloc->taille); //on munmap ou on recyle i.e on agrandi les listes chainees deja existantes ?  Dans tout les cas, inutile de faire une liste de hugeblock
+        // A FAIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIRE
         pthread_mutex_unlock(&mutex_free);
         return (void)0;
         //printf("apres munmap\n");
@@ -923,7 +928,7 @@ void* realloc(void* ptr, size_t size)
     int min = MIN( size, ((struct bloc*)((void*)ptr - sizeof_struct_bloc))->taille - sizeof_struct_bloc  );  // gerer le cas ou l'user met une size trop grande auquel cas il ne faut pas faire de segfaul// t
     // en fait c'est plutot le minimum qu'il faut !
     //printf("max = %d\n",max);
-    //si on realloc une taille plus petite, inutile de changer de zone memoire et de recopier, on change juste la metadonnee
+
     for(int i = 0 ; i < min ; i++)
     {
         ((char*)ret)[i] = ((char*)ptr)[i];
