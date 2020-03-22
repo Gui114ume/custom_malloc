@@ -1,6 +1,10 @@
 /*
  * Implementation d'une librairie d'allocation memoire. Le but est de pouvoir l'interposer avec le malloc
  * de la lib standart a l'aide d'un LD_PRELOAD
+ *
+ * La tolérance change drastiquement les perfs et peux supprimer le "PROCESSUS ARRETÉ"
+ *
+ * Il faudrait tester les effets de a tolérance et les effets de t = 2 << 25, je pense que plus t est grand, plus la tolerance doit etre elevé ! Sinon gachi de memoire extreme
  */
 
 #include <stddef.h>
@@ -56,12 +60,13 @@ static unsigned int nb_de_mutex = 0;
 
 static pthread_mutex_t mutex_malloc = PTHREAD_MUTEX_INITIALIZER;
 
+struct bloc** tmp_bloc_global = NULL;
 
 int cherche_liste_chaine( struct bloc** bloc_origine_f,
                           unsigned int* nb_de_bloc_f,
                           size_t size,
                           int tolerance )
-{
+{ // trouver un meilleur algo ! Cette fonction est utilisé à chaque malloc, ça ralenti l'execution et crée des bugs ( gedit , vlc)
     int ret = -1;
     for(int i = 0 ; i < *nb_de_bloc_f ; i++)
     {
@@ -133,11 +138,12 @@ void agrandi_liste_chaine( struct bloc** bloc_origine_f,
                            int ret )
 {
     int e = ret;
-    struct bloc** tmp_bloc = mmap(NULL, 1024 * sizeof(struct bloc*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0); // tmp_bloc, nécessaire pour utiliser "creer liste chaine"
-    creer_liste_chaine( tmp_bloc, &e, tx_f, jx_max_f, size);
+    //struct bloc** tmp_bloc = mmap(NULL, 1024 * sizeof(struct bloc*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0); // tmp_bloc, nécessaire pour utiliser "creer liste chaine"
+    // ç adoit faire mal aux performances, il faut le faire une seule fois et basta
+    creer_liste_chaine( tmp_bloc_global, &e, tx_f, jx_max_f, size);
     // relier les deux anneaux
-    fusionne_anneaux( bloc_origine_f[ret], tmp_bloc[ret]);
-    munmap(tmp_bloc, 1024 * sizeof(struct bloc*) );
+    fusionne_anneaux( bloc_origine_f[ret], tmp_bloc_global[ret]);
+    //munmap(tmp_bloc, 1024 * sizeof(struct bloc*) );
 
     return (void)0;
 }
@@ -227,10 +233,14 @@ void* malloc(size_t size)
     {
         // reserver de l'espace pour stocker les blocs, les mutex, donc de quoi stocker 1024 éléments de type struct bloc* par exemple etc
         indice = 1;
+        //ets-ce que ça prends beaucoup de mémoire tout ça ?
 
         bloc_origine = mmap(NULL, 1024 * sizeof(struct bloc*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         tab_mutex_malloc = mmap(NULL, 1024 * sizeof(pthread_mutex_t*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         next = mmap(NULL, 1024 * sizeof(void*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+        tmp_bloc_global = mmap(NULL, 1024 * sizeof(struct bloc*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0); // tmp_bloc, nécessaire pour utiliser "creer liste chaine"
+
 
         tx = mmap(NULL, 1024 * sizeof(unsigned int*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         jx_max = mmap(NULL, 1024 * sizeof(unsigned int*), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -249,7 +259,7 @@ void* malloc(size_t size)
         return (  ((struct bloc*)p)->adresse );
     }
 
-    int tolerance = 4; // 4 octets de tolerance
+    int tolerance = 100; // 4 octets de tolerance
 
     // ATTENTION AU RACE CONDITIONS SUR LES VARIABLES GLOBALES nb_de_xxx, ca risque de poser probleme...
 
@@ -438,6 +448,8 @@ void get_stat()
     printf("nb_mmap : %llu\n",nb_mmap);
     printf("nb_munmap : %llu\n",nb_munmap);
     printf("nb_de_bloc : %u\n",nb_de_bloc);
+    printf("nb_de_mutex : %u\n",nb_de_mutex);
+    printf("nb_de_next : %u\n",nb_de_next);
     return (void)0;
 }
 
